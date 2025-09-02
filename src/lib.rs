@@ -27,8 +27,8 @@ pub unsafe trait AllocZeroed: Sized {
 }
 
 pub fn alloc_zeroed<T: AllocZeroed>() -> Option<Box<T>> {
-    use std::alloc::{alloc_zeroed, Layout};
-    
+    use std::alloc::{Layout, alloc_zeroed};
+
     // Handle zero-sized types without instantiating T
     if std::mem::size_of::<T>() == 0 {
         // For zero-sized types, we can use a dangling pointer
@@ -37,10 +37,10 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Option<Box<T>> {
         // because zero-sized types don't require actual memory allocation
         return Some(unsafe { Box::from_raw(dangling_ptr) });
     }
-    
+
     // For non-zero-sized types, use the allocator
     let layout = Layout::new::<T>();
-    
+
     // SAFETY: This unsafe block is safe because:
     // 1. We've verified that T is not zero-sized
     // 2. We've created a valid Layout for T
@@ -53,7 +53,7 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Option<Box<T>> {
         if ptr.is_null() {
             return None;
         }
-        
+
         let obj_ptr = ptr as *mut T;
         Some(Box::from_raw(obj_ptr))
     }
