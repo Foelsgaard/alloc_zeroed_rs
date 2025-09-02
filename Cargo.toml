@@ -1,0 +1,7 @@
+[package]
+name = "alloc_zeroed"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloc_zeroed_macros = { path = "./macros" }
