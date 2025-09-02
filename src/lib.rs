@@ -1,3 +1,6 @@
+#[cfg(feature = "derive")]
+pub use alloc_zeroed_macros::AllocZeroed;
+
 /// # Safety
 /// All-zero pattern must be a valid value of type.
 pub unsafe trait AllocZeroed: Sized {

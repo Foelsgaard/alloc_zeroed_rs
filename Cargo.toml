@@ -3,5 +3,9 @@ name = "alloc_zeroed"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+derive = ["alloc_zeroed_macros"]
+
 [dependencies]
-alloc_zeroed_macros = { path = "./macros" }
+alloc_zeroed_macros = { path = "./macros", optional = true }
