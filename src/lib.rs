@@ -100,3 +100,98 @@ impl_tuple!(A, B, C, D, E);
 impl_tuple!(A, B, C, D, E, F);
 impl_tuple!(A, B, C, D, E, F, G);
 impl_tuple!(A, B, C, D, E, F, G, H);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_primitive_allocation() {
+        let boxed_int = alloc_zeroed::<u32>().unwrap();
+        assert_eq!(*boxed_int, 0);
+
+        let boxed_float = alloc_zeroed::<f64>().unwrap();
+        assert_eq!(*boxed_float, 0.0);
+
+        let boxed_bool = alloc_zeroed::<bool>().unwrap();
+        assert!(!(*boxed_bool));
+    }
+
+    #[test]
+    fn test_array_allocation() {
+        let boxed_array = alloc_zeroed::<[u32; 10]>().unwrap();
+        assert_eq!(*boxed_array, [0; 10]);
+    }
+
+    #[test]
+    fn test_tuple_allocation() {
+        let boxed_tuple = alloc_zeroed::<(u32, u8, bool)>().unwrap();
+        assert_eq!(*boxed_tuple, (0, 0, false));
+    }
+
+    #[test]
+    fn test_zst_allocation() {
+        #[derive(Debug, PartialEq)]
+        struct Zst;
+
+        unsafe impl AllocZeroed for Zst {}
+
+        let boxed_zst = alloc_zeroed::<Zst>().unwrap();
+        assert_eq!(*boxed_zst, Zst);
+    }
+
+    #[test]
+    fn test_custom_struct_allocation() {
+        #[derive(Debug, PartialEq)]
+        struct Point {
+            x: f64,
+            y: f64,
+            z: f64,
+        }
+
+        unsafe impl AllocZeroed for Point {}
+
+        let boxed_point = alloc_zeroed::<Point>().unwrap();
+        assert_eq!(
+            *boxed_point,
+            Point {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0
+            }
+        );
+    }
+
+    #[test]
+    fn test_insufficient_memory() {
+        // Test with a buffer that's too small
+        let mut small_buffer = [0u8; 4]; // Too small for a u64
+        let result = u64::alloc_zeroed(&mut small_buffer);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_exact_size_buffer() {
+        // Test with a buffer that's exactly the right size
+        let mut exact_buffer = [0u8; std::mem::size_of::<u32>()];
+        let result = u32::alloc_zeroed(&mut exact_buffer);
+        assert!(result.is_some());
+        assert_eq!(*result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_alignment_requirements() {
+        // Test with a type that has specific alignment requirements
+        #[repr(align(16))]
+        struct Aligned(u32);
+
+        unsafe impl AllocZeroed for Aligned {}
+
+        let boxed_aligned = alloc_zeroed::<Aligned>().unwrap();
+        assert_eq!(boxed_aligned.0, 0);
+
+        // Check that the pointer is properly aligned
+        let ptr = &boxed_aligned as *const _ as *const u8 as usize;
+        assert_eq!(ptr % 16, 0);
+    }
+}
