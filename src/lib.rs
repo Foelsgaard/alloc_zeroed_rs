@@ -229,4 +229,47 @@ mod tests {
         let ptr = &boxed_aligned as *const _ as *const u8 as usize;
         assert_eq!(ptr % 16, 0);
     }
+
+    #[test]
+    fn test_alloc_error_display() {
+        assert_eq!(
+            AllocError::NotEnoughSpace.to_string(),
+            "not enough space in the provided buffer"
+        );
+
+        assert_eq!(
+            AllocError::AlignmentFailed.to_string(),
+            "unable to align pointer in the provided buffer"
+        );
+
+        assert_eq!(
+            AllocError::InvalidLayout.to_string(),
+            "type has invalid layout for allocation"
+        );
+    }
+
+    #[test]
+    fn test_alloc_error_debug() {
+        assert_eq!(
+            format!("{:?}", AllocError::NotEnoughSpace),
+            "NotEnoughSpace"
+        );
+        assert_eq!(
+            format!("{:?}", AllocError::AlignmentFailed),
+            "AlignmentFailed"
+        );
+        assert_eq!(format!("{:?}", AllocError::InvalidLayout), "InvalidLayout");
+    }
+
+    #[test]
+    #[allow(clippy::clone_on_copy)]
+    fn test_alloc_error_clone_and_partial_eq() {
+        // Test that errors can be cloned and compared
+        let err1 = AllocError::NotEnoughSpace;
+        let err2 = err1.clone();
+        assert_eq!(err1, err2);
+
+        let err3 = AllocError::AlignmentFailed;
+        assert_ne!(err1, err3);
+    }
 }
