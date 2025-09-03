@@ -1,4 +1,4 @@
-use alloc_zeroed::AllocZeroed;
+use alloc_zeroed::{AllocZeroed, AllocZeroedBoxed};
 
 #[derive(AllocZeroed)]
 struct LargeData {

@@ -1,3 +1,5 @@
+use core::fmt;
+
 #[derive(Debug, Clone, Copy)]
 pub struct AllocError {
     kind: AllocErrorKind,
@@ -60,32 +62,6 @@ impl AllocError {
         match self.kind {
             BufferTooSmall { required, .. } => Some(required),
             OutOfMemory { required, .. } => Some(required),
-            _ => None,
-        }
-    }
-}
-
-impl AllocError {
-    pub fn suggestion(&self) -> Option<String> {
-        use AllocErrorKind::*;
-
-        match self.kind {
-            BufferTooSmall {
-                required,
-                available,
-                ..
-            } => Some(format!(
-                "Increase buffer size by at least {} bytes",
-                required - available
-            )),
-
-            AlignmentFailed {
-                required_alignment, ..
-            } => Some(format!(
-                "Use a buffer aligned to {} bytes",
-                required_alignment
-            )),
-
             _ => None,
         }
     }
@@ -159,8 +135,8 @@ impl AllocErrorBuilder {
     }
 }
 
-impl std::fmt::Display for AllocError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for AllocError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Write the base error message
         match self.kind {
             AllocErrorKind::BufferTooSmall {

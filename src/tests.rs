@@ -1,3 +1,8 @@
+extern crate std;
+
+use std::format;
+use std::string::ToString;
+
 use super::*;
 
 #[test]
@@ -225,30 +230,6 @@ fn test_alloc_error_convenience_methods() {
 }
 
 #[test]
-fn test_alloc_error_suggestions() {
-    // Test error suggestions
-    let error = AllocError::builder(AllocErrorKind::BufferTooSmall {
-        required: 100,
-        available: 50,
-        alignment: 8,
-    })
-    .build();
-
-    let suggestion = error.suggestion().unwrap();
-    assert!(suggestion.contains("Increase buffer size"));
-    assert!(suggestion.contains("50 bytes"));
-
-    let error = AllocError::builder(AllocErrorKind::AlignmentFailed {
-        required_alignment: 16,
-        address: 0x1001,
-    })
-    .build();
-
-    let suggestion = error.suggestion().unwrap();
-    assert!(suggestion.contains("aligned to 16 bytes"));
-}
-
-#[test]
 fn test_alloc_error_inspection() {
     // Test inspection methods
     let error = AllocError::builder(AllocErrorKind::BufferTooSmall {
@@ -335,4 +316,28 @@ fn test_alloc_error_macro() {
         }
     ));
     assert!(error.location().is_some()); // Macro should add location
+}
+
+#[test]
+fn test_alloc_error_suggestions() {
+    // Test error suggestions
+    let error = AllocError::builder(AllocErrorKind::BufferTooSmall {
+        required: 100,
+        available: 50,
+        alignment: 8,
+    })
+    .build();
+
+    let suggestion = error.suggestion().unwrap();
+    assert!(suggestion.contains("Increase buffer size"));
+    assert!(suggestion.contains("50 bytes"));
+
+    let error = AllocError::builder(AllocErrorKind::AlignmentFailed {
+        required_alignment: 16,
+        address: 0x1001,
+    })
+    .build();
+
+    let suggestion = error.suggestion().unwrap();
+    assert!(suggestion.contains("aligned to 16 bytes"));
 }
