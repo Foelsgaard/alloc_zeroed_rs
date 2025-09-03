@@ -9,3 +9,16 @@ derive = ["alloc_zeroed_macros"]
 
 [dependencies]
 alloc_zeroed_macros = { path = "./macros", optional = true }
+
+[dev-dependencies]
+trybuild = "1.0"
+alloc_zeroed = { path = ".", features = ["derive"] }
+
+[package.metadata.miri]
+# Tests that should be run under Miri
+tests = [
+    "miri_test_primitive",
+    "miri_test_array",
+    "miri_test_custom_struct",
+    "miri_test_buffer_allocation"
+]
