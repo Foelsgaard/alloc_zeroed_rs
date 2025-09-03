@@ -8,7 +8,7 @@ struct LargeData {
     _tuple: (u32, u8, u16, f32),
 }
 
-// Now you can use allocate_zeroed with LargeData
+// Now you can use allocate_zeroed_boxed with LargeData
 fn main() {
     match LargeData::alloc_zeroed_boxed() {
         Ok(_large_data) => {
