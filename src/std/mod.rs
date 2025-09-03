@@ -6,14 +6,54 @@ use crate::{AllocError, AllocErrorKind, AllocZeroed, alloc_err};
 use std::boxed::Box;
 
 pub trait AllocZeroedBoxed: crate::AllocZeroed {
+    /// Allocates and zero-initializes an instance of `Self` on the heap.
+    ///
+    /// This method uses the global allocator to allocate memory for `Self` on the heap,
+    /// ensuring proper alignment and zero-initializing the allocated memory. The returned
+    /// `Box` will properly manage the memory and call the destructor when dropped.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Box<Self>)` - A box containing the zero-initialized object if allocation succeeds.
+    /// * `Err(AllocError)` - An error describing why allocation failed (out of memory
+    ///                       or invalid layout).
+    ///
+    /// # Errors
+    ///
+    /// Returns `AllocError` in the following cases:
+    /// * `AllocError::OutOfMemory` - The system allocator cannot fulfill the allocation request
+    /// * `AllocError::InvalidLayout` - The type has an invalid size or alignment combination
+    ///
+    /// # Safety
+    ///
+    /// This method relies on the safety guarantees of `AllocZeroed`, requiring that an
+    /// all-zero bit pattern is a valid representation for the type `Self`.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use alloc_zeroed::AllocZeroedBoxed;
+    /// use alloc_zeroed::{AllocZeroed, AllocZeroedBoxed};
     ///
-    /// let value = u32::alloc_zeroed_boxed().unwrap();
-    /// assert_eq!(*value, 0);
+    /// #[derive(AllocZeroed)]
+    /// struct Point {
+    ///     x: f64,
+    ///     y: f64,
+    /// }
+    ///
+    /// let point = Point::alloc_zeroed_boxed().unwrap();
+    /// assert_eq!(point.x, 0.0);
+    /// assert_eq!(point.y, 0.0);
     /// ```
+    ///
+    /// # Zero-Sized Types
+    ///
+    /// For zero-sized types (ZSTs), this method always succeeds and returns a box containing
+    /// a dangling pointer, as ZSTs don't require actual memory allocation.
+    ///
+    /// # Notes
+    ///
+    /// This method requires the `std` feature to be enabled, as it uses the global allocator
+    /// and `Box` type from the standard library.
     fn alloc_zeroed_boxed() -> Result<Box<Self>, AllocError> {
         use AllocErrorKind::*;
         use std::alloc::{Layout, alloc_zeroed};

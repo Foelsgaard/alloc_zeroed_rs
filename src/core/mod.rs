@@ -10,6 +10,55 @@ pub use error::{AllocError, AllocErrorKind};
 /// # Safety
 /// All-zero pattern must be a valid value of type.
 pub unsafe trait AllocZeroed: Sized {
+    /// Allocates and zero-initializes an instance of `Self` in the provided buffer.
+    ///
+    /// This method attempts to allocate memory for `Self` within the given byte buffer,
+    /// ensuring proper alignment and zero-initializing the allocated memory.
+    ///
+    /// # Parameters
+    ///
+    /// * `mem` - A mutable byte slice where the object will be allocated. The buffer must
+    ///           be large enough to accommodate the type's size and alignment requirements.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(&mut Self)` - A mutable reference to the zero-initialized object if allocation succeeds.
+    /// * `Err(AllocError)` - An error describing why allocation failed (insufficient space,
+    ///                       alignment issues, or invalid layout).
+    ///
+    /// # Errors
+    ///
+    /// Returns `AllocError` in the following cases:
+    /// * `AllocError::BufferTooSmall` - The buffer doesn't have enough space for the type
+    /// * `AllocError::AlignmentFailed` - The buffer cannot be aligned to the type's requirements
+    /// * `AllocError::InvalidLayout` - The type has an invalid size or alignment combination
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe because it assumes that an all-zero bit pattern is a valid
+    /// representation for the type `Self`. Implementors must ensure this invariant holds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use alloc_zeroed::AllocZeroed;
+    ///
+    /// #[derive(AllocZeroed)]
+    /// struct Point {
+    ///     x: f64,
+    ///     y: f64,
+    /// }
+    ///
+    /// let mut buffer = [0u8; 1024];
+    /// let point = Point::alloc_zeroed(&mut buffer).unwrap();
+    /// assert_eq!(point.x, 0.0);
+    /// assert_eq!(point.y, 0.0);
+    /// ```
+    ///
+    /// # Zero-Sized Types
+    ///
+    /// For zero-sized types (ZSTs), this method always succeeds and returns a dangling pointer,
+    /// as ZSTs don't require actual memory allocation.
     fn alloc_zeroed(mem: &mut [u8]) -> Result<&mut Self, AllocError> {
         use AllocErrorKind::*;
         use core::mem;
