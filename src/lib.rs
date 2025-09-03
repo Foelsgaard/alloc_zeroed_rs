@@ -22,11 +22,18 @@ pub unsafe trait AllocZeroed: Sized {
         }
 
         if offset == usize::MAX {
-            return Err(AllocError::AlignmentFailed);
+            return Err(AllocError::AlignmentFailed {
+                required_alignment: align,
+                address: mem_ptr as usize,
+            });
         }
 
         if size > len.saturating_sub(offset) {
-            return Err(AllocError::NotEnoughSpace);
+            return Err(AllocError::BufferTooSmall {
+                required: size,
+                available: len.saturating_sub(offset),
+                alignment: align,
+            });
         }
 
         // SAFETY: We've checked that the offset is valid and there's enough space
@@ -70,7 +77,10 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Result<Box<T>, AllocError> {
     unsafe {
         let ptr = alloc_zeroed(layout);
         if ptr.is_null() {
-            return Err(AllocError::NotEnoughSpace);
+            return Err(AllocError::OutOfMemory {
+                required: layout.size(),
+                alignment: layout.align(),
+            });
         }
 
         let obj_ptr = ptr as *mut T;
@@ -80,27 +90,57 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Result<Box<T>, AllocError> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AllocError {
-    /// Not enough space in the provided buffer
-    NotEnoughSpace,
+    /// Not enough space in the provided buffer (for trait method)
+    BufferTooSmall {
+        required: usize,
+        available: usize,
+        alignment: usize,
+    },
+    /// The global allocator is out of memory (for free function)
+    OutOfMemory { required: usize, alignment: usize },
     /// Unable to align the pointer in the provided buffer
-    AlignmentFailed,
-    /// The type has an invalid size or alignment (e.g., zero-sized type in a context that requires allocation)
-    InvalidLayout,
+    AlignmentFailed {
+        required_alignment: usize,
+        address: usize,
+    },
+    /// The type has an invalid size or alignment
+    InvalidLayout { size: usize, alignment: usize },
 }
 
 impl std::fmt::Display for AllocError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AllocError::NotEnoughSpace => write!(f, "not enough space in the provided buffer"),
-            AllocError::AlignmentFailed => {
-                write!(f, "unable to align pointer in the provided buffer")
+            AllocError::BufferTooSmall {
+                required,
+                available,
+                alignment,
+            } => write!(
+                f,
+                "required {} bytes (with {} alignment) but only {} bytes available in buffer",
+                required, alignment, available
+            ),
+            AllocError::OutOfMemory {
+                required,
+                alignment,
+            } => write!(
+                f,
+                "out of memory: required {} bytes with {} alignment",
+                required, alignment
+            ),
+            AllocError::AlignmentFailed {
+                required_alignment,
+                address,
+            } => write!(
+                f,
+                "could not align address {} to required alignment {}",
+                address, required_alignment
+            ),
+            AllocError::InvalidLayout { size, alignment } => {
+                write!(f, "invalid layout: size={}, alignment={}", size, alignment)
             }
-            AllocError::InvalidLayout => write!(f, "type has invalid layout for allocation"),
         }
     }
 }
-
-impl std::error::Error for AllocError {}
 
 // Implement AllocZeroed for primitive types
 unsafe impl AllocZeroed for u8 {}
@@ -202,7 +242,14 @@ mod tests {
         // Test with a buffer that's too small
         let mut small_buffer = [0u8; 4]; // Too small for a u64
         let result = u64::alloc_zeroed(&mut small_buffer);
-        assert_eq!(result, Err(AllocError::NotEnoughSpace));
+        assert!(matches!(
+            result,
+            Err(AllocError::BufferTooSmall {
+                required: 8,
+                available: _,
+                alignment: _
+            })
+        ));
     }
 
     #[test]
@@ -232,44 +279,132 @@ mod tests {
 
     #[test]
     fn test_alloc_error_display() {
+        // Test BufferTooSmall
         assert_eq!(
-            AllocError::NotEnoughSpace.to_string(),
-            "not enough space in the provided buffer"
+            AllocError::BufferTooSmall {
+                required: 100,
+                available: 50,
+                alignment: 8
+            }
+            .to_string(),
+            "required 100 bytes (with 8 alignment) but only 50 bytes available in buffer"
         );
 
+        // Test OutOfMemory
         assert_eq!(
-            AllocError::AlignmentFailed.to_string(),
-            "unable to align pointer in the provided buffer"
+            AllocError::OutOfMemory {
+                required: 1024,
+                alignment: 16
+            }
+            .to_string(),
+            "out of memory: required 1024 bytes with 16 alignment"
         );
 
+        // Test AlignmentFailed
         assert_eq!(
-            AllocError::InvalidLayout.to_string(),
-            "type has invalid layout for allocation"
+            AllocError::AlignmentFailed {
+                required_alignment: 16,
+                address: 0x1001
+            }
+            .to_string(),
+            "could not align address 4097 to required alignment 16"
+        );
+
+        // Test InvalidLayout
+        assert_eq!(
+            AllocError::InvalidLayout {
+                size: 0,
+                alignment: 16
+            }
+            .to_string(),
+            "invalid layout: size=0, alignment=16"
         );
     }
 
     #[test]
     fn test_alloc_error_debug() {
-        assert_eq!(
-            format!("{:?}", AllocError::NotEnoughSpace),
-            "NotEnoughSpace"
+        // Test BufferTooSmall
+        assert!(
+            format!(
+                "{:?}",
+                AllocError::BufferTooSmall {
+                    required: 100,
+                    available: 50,
+                    alignment: 8
+                }
+            )
+            .contains("BufferTooSmall")
         );
-        assert_eq!(
-            format!("{:?}", AllocError::AlignmentFailed),
-            "AlignmentFailed"
+
+        // Test OutOfMemory
+        assert!(
+            format!(
+                "{:?}",
+                AllocError::OutOfMemory {
+                    required: 1024,
+                    alignment: 16
+                }
+            )
+            .contains("OutOfMemory")
         );
-        assert_eq!(format!("{:?}", AllocError::InvalidLayout), "InvalidLayout");
+
+        // Test AlignmentFailed
+        assert!(
+            format!(
+                "{:?}",
+                AllocError::AlignmentFailed {
+                    required_alignment: 16,
+                    address: 0x1001
+                }
+            )
+            .contains("AlignmentFailed")
+        );
+
+        // Test InvalidLayout
+        assert!(
+            format!(
+                "{:?}",
+                AllocError::InvalidLayout {
+                    size: 0,
+                    alignment: 16
+                }
+            )
+            .contains("InvalidLayout")
+        );
     }
 
     #[test]
     #[allow(clippy::clone_on_copy)]
     fn test_alloc_error_clone_and_partial_eq() {
         // Test that errors can be cloned and compared
-        let err1 = AllocError::NotEnoughSpace;
+        let err1 = AllocError::BufferTooSmall {
+            required: 100,
+            available: 50,
+            alignment: 8,
+        };
         let err2 = err1.clone();
         assert_eq!(err1, err2);
 
-        let err3 = AllocError::AlignmentFailed;
+        let err3 = AllocError::OutOfMemory {
+            required: 1024,
+            alignment: 16,
+        };
         assert_ne!(err1, err3);
+
+        // Test that different instances with same values are equal
+        let err4 = AllocError::BufferTooSmall {
+            required: 100,
+            available: 50,
+            alignment: 8,
+        };
+        assert_eq!(err1, err4);
+
+        // Test that different instances with different values are not equal
+        let err5 = AllocError::BufferTooSmall {
+            required: 200, // Different required size
+            available: 50,
+            alignment: 8,
+        };
+        assert_ne!(err1, err5);
     }
 }
