@@ -38,12 +38,12 @@ fn miri_test_buffer_allocation() {
     let mut buffer = [0u8; 1024];
 
     // Allocate multiple objects in the same buffer
-    if let Some(int_ref) = u32::alloc_zeroed(&mut buffer[..32]) {
+    if let Ok(int_ref) = u32::alloc_zeroed(&mut buffer[..32]) {
         *int_ref = 42;
         assert_eq!(*int_ref, 42);
     }
 
-    if let Some(float_ref) = f64::alloc_zeroed(&mut buffer[32..64]) {
+    if let Ok(float_ref) = f64::alloc_zeroed(&mut buffer[32..64]) {
         *float_ref = std::f64::consts::PI;
         assert_eq!(*float_ref, std::f64::consts::PI);
     }

@@ -46,7 +46,7 @@ pub fn derive_alloc_zeroed(input: TokenStream) -> TokenStream {
         // SAFETY: This macro ensures all fields can be safely zero-initialized
         // by requiring that all field types implement AllocZeroed
         unsafe impl #impl_generics AllocZeroed for #name #ty_generics #where_clause {
-            fn alloc_zeroed(mem: &mut [u8]) -> Option<&mut Self> {
+            fn alloc_zeroed(mem: &mut [u8]) -> Result<&mut Self, ::alloc_zeroed::AllocError> {
                 use core::mem;
                 
                 let size = mem::size_of::<Self>();
@@ -55,9 +55,13 @@ pub fn derive_alloc_zeroed(input: TokenStream) -> TokenStream {
                 
                 let mem_ptr = mem.as_mut_ptr();
                 let offset = mem_ptr.align_offset(align);
-                
-                if offset == usize::MAX || size > len - offset {
-                    return None;
+              
+                if offset == usize::MAX {
+                    return Err(::alloc_zeroed::AllocError::AlignmentFailed);
+                }
+
+                if size > len - offset {
+                    return Err(::alloc_zeroed::AllocError::NotEnoughSpace);
                 }
                 
                 // SAFETY: We've checked that the offset is valid and there's enough space
@@ -70,7 +74,7 @@ pub fn derive_alloc_zeroed(input: TokenStream) -> TokenStream {
                     ptr.write(Self {
                         #(#field_inits,)*
                     });
-                    ptr.as_mut()
+                    Ok(&mut *ptr)
                 }
             }
         }

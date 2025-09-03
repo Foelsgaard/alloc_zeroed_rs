@@ -4,7 +4,7 @@ pub use alloc_zeroed_macros::AllocZeroed;
 /// # Safety
 /// All-zero pattern must be a valid value of type.
 pub unsafe trait AllocZeroed: Sized {
-    fn alloc_zeroed(mem: &mut [u8]) -> Option<&mut Self> {
+    fn alloc_zeroed(mem: &mut [u8]) -> Result<&mut Self, AllocError> {
         use core::mem;
 
         let size = mem::size_of::<Self>();
@@ -18,21 +18,24 @@ pub unsafe trait AllocZeroed: Sized {
         if size == 0 {
             // SAFETY: Zero-sized types don't require actual memory
             let dangling_ptr = std::ptr::NonNull::<Self>::dangling().as_ptr();
-            return unsafe { Some(&mut *dangling_ptr) };
+            return unsafe { Ok(&mut *dangling_ptr) };
         }
 
         if offset == usize::MAX {
-            return None;
+            return Err(AllocError::AlignmentFailed);
         }
 
         if size > len.saturating_sub(offset) {
-            return None;
+            return Err(AllocError::NotEnoughSpace);
         }
 
+        // SAFETY: We've checked that the offset is valid and there's enough space
+        let ptr = unsafe { mem_ptr.add(offset) as *mut Self };
+
+        // SAFETY: We've ensured the pointer is properly aligned and there's enough space
         unsafe {
-            let ptr = mem_ptr.add(offset) as *mut Self;
             ptr.write_bytes(0, 1);
-            ptr.as_mut()
+            Ok(&mut *ptr)
         }
     }
 }
@@ -45,20 +48,17 @@ pub unsafe trait AllocZeroed: Sized {
 /// let value = alloc_zeroed::<u32>().unwrap();
 /// assert_eq!(*value, 0);
 /// ```
-pub fn alloc_zeroed<T: AllocZeroed>() -> Option<Box<T>> {
+pub fn alloc_zeroed<T: AllocZeroed>() -> Result<Box<T>, AllocError> {
     use std::alloc::{Layout, alloc_zeroed};
 
-    // Handle zero-sized types without instantiating T
+    let layout = Layout::new::<T>();
     if std::mem::size_of::<T>() == 0 {
         // For zero-sized types, we can use a dangling pointer
         let dangling_ptr = std::ptr::NonNull::<T>::dangling().as_ptr();
         // SAFETY: For zero-sized types, Box::from_raw with a dangling pointer is safe
         // because zero-sized types don't require actual memory allocation
-        return Some(unsafe { Box::from_raw(dangling_ptr) });
+        return Ok(unsafe { Box::from_raw(dangling_ptr) });
     }
-
-    // For non-zero-sized types, use the allocator
-    let layout = Layout::new::<T>();
 
     // SAFETY: This unsafe block is safe because:
     // 1. We've verified that T is not zero-sized
@@ -70,13 +70,37 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Option<Box<T>> {
     unsafe {
         let ptr = alloc_zeroed(layout);
         if ptr.is_null() {
-            return None;
+            return Err(AllocError::NotEnoughSpace);
         }
 
         let obj_ptr = ptr as *mut T;
-        Some(Box::from_raw(obj_ptr))
+        Ok(Box::from_raw(obj_ptr))
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllocError {
+    /// Not enough space in the provided buffer
+    NotEnoughSpace,
+    /// Unable to align the pointer in the provided buffer
+    AlignmentFailed,
+    /// The type has an invalid size or alignment (e.g., zero-sized type in a context that requires allocation)
+    InvalidLayout,
+}
+
+impl std::fmt::Display for AllocError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AllocError::NotEnoughSpace => write!(f, "not enough space in the provided buffer"),
+            AllocError::AlignmentFailed => {
+                write!(f, "unable to align pointer in the provided buffer")
+            }
+            AllocError::InvalidLayout => write!(f, "type has invalid layout for allocation"),
+        }
+    }
+}
+
+impl std::error::Error for AllocError {}
 
 // Implement AllocZeroed for primitive types
 unsafe impl AllocZeroed for u8 {}
@@ -178,7 +202,7 @@ mod tests {
         // Test with a buffer that's too small
         let mut small_buffer = [0u8; 4]; // Too small for a u64
         let result = u64::alloc_zeroed(&mut small_buffer);
-        assert!(result.is_none());
+        assert_eq!(result, Err(AllocError::NotEnoughSpace));
     }
 
     #[test]
@@ -186,7 +210,7 @@ mod tests {
         // Test with a buffer that's exactly the right size
         let mut exact_buffer = [0u8; std::mem::size_of::<u32>()];
         let result = u32::alloc_zeroed(&mut exact_buffer);
-        assert!(result.is_some());
+        assert!(result.is_ok());
         assert_eq!(*result.unwrap(), 0);
     }
 

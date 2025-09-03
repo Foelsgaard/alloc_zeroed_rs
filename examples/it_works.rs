@@ -10,7 +10,13 @@ struct LargeData {
 
 // Now you can use allocate_zeroed with LargeData
 fn main() {
-    if let Some(_large_data) = alloc_zeroed::<LargeData>() {
-        println!("Successfully allocated large data structure");
+    match alloc_zeroed::<LargeData>() {
+        Ok(_large_data) => {
+            println!("Successfully allocated large data structure");
+            // Use large_data here
+        }
+        Err(e) => {
+            eprintln!("Failed to allocate: {}", e);
+        }
     }
 }
