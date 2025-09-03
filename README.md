@@ -88,6 +88,20 @@ The `AllocZeroed` trait is marked as `unsafe` because not all types can be safel
 
 See the `examples` directory for complete working examples.
 
+## Development
+
+### Code Coverage
+
+To generate a code coverage report locally:
+
+```bash
+# Install the coverage tool (if not already installed)
+cargo install cargo-llvm-cov
+
+# Generate and open an HTML coverage report
+cargo llvm-cov --all-features --workspace --html --open
+```
+
 ## License
 
 Licensed under either of:
