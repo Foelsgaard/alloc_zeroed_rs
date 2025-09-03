@@ -1,15 +1,17 @@
 #[cfg(feature = "derive")]
 pub use alloc_zeroed_macros::AllocZeroed;
 
+#[macro_use]
 mod error;
 mod implementations;
 
-pub use error::AllocError;
+pub use error::{AllocError, AllocErrorKind};
 
 /// # Safety
 /// All-zero pattern must be a valid value of type.
 pub unsafe trait AllocZeroed: Sized {
     fn alloc_zeroed(mem: &mut [u8]) -> Result<&mut Self, AllocError> {
+        use AllocErrorKind::*;
         use core::mem;
 
         let size = mem::size_of::<Self>();
@@ -26,19 +28,25 @@ pub unsafe trait AllocZeroed: Sized {
             return unsafe { Ok(&mut *dangling_ptr) };
         }
 
+        let type_name = core::any::type_name::<Self>();
+
         if offset == usize::MAX {
-            return Err(AllocError::AlignmentFailed {
+            return Err(alloc_err!(AlignmentFailed {
                 required_alignment: align,
                 address: mem_ptr as usize,
-            });
+            })
+            .with_type_name(type_name)
+            .build());
         }
 
         if size > len.saturating_sub(offset) {
-            return Err(AllocError::BufferTooSmall {
+            return Err(alloc_err!(BufferTooSmall {
                 required: size,
                 available: len.saturating_sub(offset),
                 alignment: align,
-            });
+            })
+            .with_type_name(type_name)
+            .build());
         }
 
         // SAFETY: We've checked that the offset is valid and there's enough space
@@ -61,6 +69,7 @@ pub unsafe trait AllocZeroed: Sized {
 /// assert_eq!(*value, 0);
 /// ```
 pub fn alloc_zeroed<T: AllocZeroed>() -> Result<Box<T>, AllocError> {
+    use AllocErrorKind::*;
     use std::alloc::{Layout, alloc_zeroed};
 
     let layout = Layout::new::<T>();
@@ -72,6 +81,8 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Result<Box<T>, AllocError> {
         return Ok(unsafe { Box::from_raw(dangling_ptr) });
     }
 
+    let type_name = std::any::type_name::<T>();
+
     // SAFETY: This unsafe block is safe because:
     // 1. We've verified that T is not zero-sized
     // 2. We've created a valid Layout for T
@@ -82,10 +93,12 @@ pub fn alloc_zeroed<T: AllocZeroed>() -> Result<Box<T>, AllocError> {
     unsafe {
         let ptr = alloc_zeroed(layout);
         if ptr.is_null() {
-            return Err(AllocError::OutOfMemory {
+            return Err(alloc_err!(OutOfMemory {
                 required: layout.size(),
                 alignment: layout.align(),
-            });
+            })
+            .with_type_name(type_name)
+            .build());
         }
 
         let obj_ptr = ptr as *mut T;
