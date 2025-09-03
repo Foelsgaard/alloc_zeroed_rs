@@ -24,14 +24,6 @@ pub fn derive_alloc_zeroed(input: TokenStream) -> TokenStream {
     // Extract field types for the where clause
     let field_types = fields.iter().map(|field| &field.ty);
     
-    // Generate field assignments for the implementation
-    let field_inits = fields.iter().map(|field| {
-        let field_name = field.ident.as_ref().unwrap();
-        quote! {
-            #field_name: core::mem::zeroed()
-        }
-    });
-    
     // Clone generics before modifying to avoid borrowing issues
     let mut generics = input.generics.clone();
     let where_clause = generics.make_where_clause();
@@ -45,39 +37,7 @@ pub fn derive_alloc_zeroed(input: TokenStream) -> TokenStream {
     let expanded = quote! {
         // SAFETY: This macro ensures all fields can be safely zero-initialized
         // by requiring that all field types implement AllocZeroed
-        unsafe impl #impl_generics AllocZeroed for #name #ty_generics #where_clause {
-            fn alloc_zeroed(mem: &mut [u8]) -> Result<&mut Self, ::alloc_zeroed::AllocError> {
-                use core::mem;
-                
-                let size = mem::size_of::<Self>();
-                let align = mem::align_of::<Self>();
-                let len = mem.len();
-                
-                let mem_ptr = mem.as_mut_ptr();
-                let offset = mem_ptr.align_offset(align);
-              
-                if offset == usize::MAX {
-                    return Err(::alloc_zeroed::AllocError::AlignmentFailed);
-                }
-
-                if size > len - offset {
-                    return Err(::alloc_zeroed::AllocError::NotEnoughSpace);
-                }
-                
-                // SAFETY: We've checked that the offset is valid and there's enough space
-                let ptr = unsafe { mem_ptr.add(offset) } as *mut Self;
-                
-                // SAFETY: We've ensured the pointer is properly aligned and there's enough space
-                // All fields implement AllocZeroed, so zero-initialization is safe
-                unsafe {
-                    // Initialize the struct with zeroed fields
-                    ptr.write(Self {
-                        #(#field_inits,)*
-                    });
-                    Ok(&mut *ptr)
-                }
-            }
-        }
+        unsafe impl #impl_generics AllocZeroed for #name #ty_generics #where_clause {}
     };
     
     TokenStream::from(expanded)
