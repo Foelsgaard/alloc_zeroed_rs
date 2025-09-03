@@ -14,7 +14,18 @@ pub unsafe trait AllocZeroed: Sized {
         let mem_ptr = mem.as_mut_ptr();
         let offset = mem_ptr.align_offset(align);
 
-        if offset == usize::MAX || size + offset > len {
+        // Handle zero-sized types
+        if size == 0 {
+            // SAFETY: Zero-sized types don't require actual memory
+            let dangling_ptr = std::ptr::NonNull::<Self>::dangling().as_ptr();
+            return unsafe { Some(&mut *dangling_ptr) };
+        }
+
+        if offset == usize::MAX {
+            return None;
+        }
+
+        if size > len.saturating_sub(offset) {
             return None;
         }
 
