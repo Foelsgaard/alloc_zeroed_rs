@@ -1,14 +1,14 @@
-use alloc_zeroed::{AllocZeroed, alloc_zeroed};
+use alloc_zeroed::AllocZeroed;
 
 #[test]
 fn miri_test_primitive() {
-    let value = alloc_zeroed::<u32>().unwrap();
+    let value = u32::alloc_zeroed_boxed().unwrap();
     assert_eq!(*value, 0);
 }
 
 #[test]
 fn miri_test_array() {
-    let array = alloc_zeroed::<[u32; 100]>().unwrap();
+    let array = <[u32; 100]>::alloc_zeroed_boxed().unwrap();
     for &item in array.iter() {
         assert_eq!(item, 0);
     }
@@ -25,7 +25,7 @@ fn miri_test_custom_struct() {
 
     unsafe impl AllocZeroed for TestStruct {}
 
-    let instance = alloc_zeroed::<TestStruct>().unwrap();
+    let instance = TestStruct::alloc_zeroed_boxed().unwrap();
     assert_eq!(instance.a, 0);
     assert_eq!(instance.b, 0);
     for &byte in &instance.c {

@@ -1,4 +1,4 @@
-use alloc_zeroed::{AllocZeroed, alloc_zeroed};
+use alloc_zeroed::AllocZeroed;
 
 #[derive(AllocZeroed)]
 struct LargeData {
@@ -10,7 +10,7 @@ struct LargeData {
 
 // Now you can use allocate_zeroed with LargeData
 fn main() {
-    match alloc_zeroed::<LargeData>() {
+    match LargeData::alloc_zeroed_boxed() {
         Ok(_large_data) => {
             println!("Successfully allocated large data structure");
             // Use large_data here

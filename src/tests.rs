@@ -2,25 +2,25 @@ use super::*;
 
 #[test]
 fn test_primitive_allocation() {
-    let boxed_int = alloc_zeroed::<u32>().unwrap();
+    let boxed_int = u32::alloc_zeroed_boxed().unwrap();
     assert_eq!(*boxed_int, 0);
 
-    let boxed_float = alloc_zeroed::<f64>().unwrap();
+    let boxed_float = f64::alloc_zeroed_boxed().unwrap();
     assert_eq!(*boxed_float, 0.0);
 
-    let boxed_bool = alloc_zeroed::<bool>().unwrap();
+    let boxed_bool = bool::alloc_zeroed_boxed().unwrap();
     assert!(!(*boxed_bool));
 }
 
 #[test]
 fn test_array_allocation() {
-    let boxed_array = alloc_zeroed::<[u32; 10]>().unwrap();
+    let boxed_array = <[u32; 10]>::alloc_zeroed_boxed().unwrap();
     assert_eq!(*boxed_array, [0; 10]);
 }
 
 #[test]
 fn test_tuple_allocation() {
-    let boxed_tuple = alloc_zeroed::<(u32, u8, bool)>().unwrap();
+    let boxed_tuple = <(u32, u8, bool)>::alloc_zeroed_boxed().unwrap();
     assert_eq!(*boxed_tuple, (0, 0, false));
 }
 
@@ -31,7 +31,7 @@ fn test_zst_allocation() {
 
     unsafe impl AllocZeroed for Zst {}
 
-    let boxed_zst = alloc_zeroed::<Zst>().unwrap();
+    let boxed_zst = Zst::alloc_zeroed_boxed().unwrap();
     assert_eq!(*boxed_zst, Zst);
 }
 
@@ -46,7 +46,7 @@ fn test_custom_struct_allocation() {
 
     unsafe impl AllocZeroed for Point {}
 
-    let boxed_point = alloc_zeroed::<Point>().unwrap();
+    let boxed_point = Point::alloc_zeroed_boxed().unwrap();
     assert_eq!(
         *boxed_point,
         Point {
@@ -74,7 +74,7 @@ fn test_alignment_requirements() {
 
     unsafe impl AllocZeroed for Aligned {}
 
-    let boxed_aligned = alloc_zeroed::<Aligned>().unwrap();
+    let boxed_aligned = Aligned::alloc_zeroed_boxed().unwrap();
     assert_eq!(boxed_aligned.0, 0);
 
     // Check that the pointer is properly aligned
