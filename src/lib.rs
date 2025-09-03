@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(boxed_aligned.0, 0);
 
         // Check that the pointer is properly aligned
-        let ptr = &boxed_aligned as *const _ as *const u8 as usize;
+        let ptr = &*boxed_aligned as *const _ as *const u8 as usize;
         assert_eq!(ptr % 16, 0);
     }
 
