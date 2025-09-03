@@ -26,6 +26,14 @@ pub unsafe trait AllocZeroed: Sized {
     }
 }
 
+/// # Examples
+///
+/// ```
+/// use alloc_zeroed::{AllocZeroed, alloc_zeroed};
+///
+/// let value = alloc_zeroed::<u32>().unwrap();
+/// assert_eq!(*value, 0);
+/// ```
 pub fn alloc_zeroed<T: AllocZeroed>() -> Option<Box<T>> {
     use std::alloc::{Layout, alloc_zeroed};
 
