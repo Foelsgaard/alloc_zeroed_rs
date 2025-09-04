@@ -1,3 +1,5 @@
+use core::mem::MaybeUninit;
+
 use crate::AllocZeroed;
 
 // Implement AllocZeroed for primitive types
@@ -33,3 +35,8 @@ impl_tuple!(A, B, C, D, E);
 impl_tuple!(A, B, C, D, E, F);
 impl_tuple!(A, B, C, D, E, F, G);
 impl_tuple!(A, B, C, D, E, F, G, H);
+
+// SAFETY: MaybeUninit<T> can safely contain any bit pattern, including all zeros.
+// The default implementation of alloc_zeroed will zero the memory, which is always
+// safe for MaybeUninit<T> regardless of T.
+unsafe impl<T> AllocZeroed for MaybeUninit<T> {}
