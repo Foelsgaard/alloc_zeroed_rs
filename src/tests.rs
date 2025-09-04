@@ -2,6 +2,7 @@ extern crate std;
 
 use std::format;
 use std::string::ToString;
+use std::vec;
 
 use super::*;
 
@@ -340,4 +341,171 @@ fn test_alloc_error_suggestions() {
 
     let suggestion = error.suggestion().unwrap();
     assert!(suggestion.contains("aligned to 16 bytes"));
+}
+
+#[test]
+fn test_alloc_zeroed_slice_basic() {
+    let mut buffer = [0u8; 1024];
+
+    // Allocate a slice of u32 values
+    let slice = u32::alloc_zeroed_slice(&mut buffer).unwrap();
+
+    // Should be able to fit at least 256 u32s in 1KB (accounting for alignment)
+    assert!(slice.len() >= 256);
+
+    // All values should be zero-initialized
+    for &value in slice.iter() {
+        assert_eq!(value, 0);
+    }
+}
+
+#[test]
+fn test_alloc_zeroed_slice_alignment() {
+    // Create a buffer with non-aligned start
+    let mut buffer = [0u8; 1024];
+    let buffer_ptr = buffer.as_mut_ptr() as usize;
+
+    // Force unaligned buffer by taking a subslice
+    let unaligned_buffer = if buffer_ptr % 4 == 0 {
+        &mut buffer[1..] // Skip one byte to make it unaligned
+    } else {
+        &mut buffer[..] // Already unaligned
+    };
+
+    // Should still work and return properly aligned slice
+    let slice = u32::alloc_zeroed_slice(unaligned_buffer).unwrap();
+
+    // Check that the returned slice is properly aligned
+    let slice_ptr = slice.as_ptr() as usize;
+    assert_eq!(slice_ptr % 4, 0);
+
+    // All values should be zero
+    for &value in slice.iter() {
+        assert_eq!(value, 0);
+    }
+}
+
+#[test]
+fn test_alloc_zeroed_slice_insufficient_space() {
+    let mut buffer = [0u8; 3]; // Too small for even one u32 after alignment
+
+    let result = u32::alloc_zeroed_slice(&mut buffer);
+    assert!(result.is_err());
+
+    // Check error type
+    if let Err(AllocErrorKind::BufferTooSmall { .. }) = result.map_err(|err| err.kind()) {
+        // Expected error
+    } else {
+        panic!("Expected BufferTooSmall error");
+    }
+}
+
+#[test]
+fn test_alloc_zeroed_slice_zst() {
+    let mut buffer = [0u8; 0]; // Empty buffer
+
+    // ZSTs should work with any buffer, even empty
+    #[derive(Debug, PartialEq)]
+    struct Zst;
+
+    unsafe impl AllocZeroed for Zst {}
+
+    let slice = Zst::alloc_zeroed_slice(&mut buffer).unwrap();
+
+    // Should return maximum possible slice for ZST
+    assert_eq!(slice.len(), usize::MAX);
+
+    // Can access elements (they don't exist in memory but are valid)
+    assert_eq!(&slice[0], &Zst);
+    assert_eq!(&slice[usize::MAX - 1], &Zst);
+}
+
+#[test]
+fn test_alloc_zeroed_slice_exact_fit() {
+    // Create a buffer that fits exactly N items
+    let num_items = 4;
+    let required_bytes = num_items * std::mem::size_of::<u32>();
+    let mut buffer = vec![0xFFu8; required_bytes]; // Fill with non-zero
+
+    let slice = u32::alloc_zeroed_slice(&mut buffer).unwrap();
+
+    // Should get exactly the number of items that fit
+    assert_eq!(slice.len(), num_items);
+
+    // All values should be zero
+    for &value in slice.iter() {
+        assert_eq!(value, 0);
+    }
+
+    // The original buffer should be zeroed in the allocated region
+    let allocated_region = &buffer[..required_bytes];
+    for &byte in allocated_region {
+        assert_eq!(byte, 0);
+    }
+}
+
+#[test]
+fn test_alloc_zeroed_slice_partial_fit() {
+    // Create a buffer that doesn't fit an exact number of items
+    let num_items = 3;
+    let required_bytes = num_items * std::mem::size_of::<u32>();
+    let mut buffer = vec![0xFFu8; required_bytes + 2]; // Extra 2 bytes
+
+    let slice = u32::alloc_zeroed_slice(&mut buffer).unwrap();
+
+    // Should only fit the complete items (3), not the partial one
+    assert_eq!(slice.len(), num_items);
+
+    // All values should be zero
+    for &value in slice.iter() {
+        assert_eq!(value, 0);
+    }
+}
+
+#[test]
+fn test_alloc_zeroed_slice_different_types() {
+    let mut buffer = [0u8; 256];
+
+    // Test with different types
+    let u32_slice = u32::alloc_zeroed_slice(&mut buffer).unwrap();
+    assert!(u32_slice.len() >= 64);
+
+    let u64_slice = u64::alloc_zeroed_slice(&mut buffer).unwrap();
+    assert!(u64_slice.len() >= 32);
+
+    let u8_slice = u8::alloc_zeroed_slice(&mut buffer).unwrap();
+    assert!(u8_slice.len() >= 256);
+}
+
+#[test]
+fn test_alloc_zeroed_slice_zero_length_buffer() {
+    let mut buffer = [0u8; 0];
+
+    // For non-ZST, should fail with BufferTooSmall
+    let result = u32::alloc_zeroed_slice(&mut buffer);
+    assert!(result.is_err());
+
+    if let Err(AllocErrorKind::BufferTooSmall { .. }) = result.map_err(|err| err.kind()) {
+        // Expected error
+    } else {
+        panic!("Expected BufferTooSmall error");
+    }
+}
+
+#[test]
+fn test_alloc_zeroed_slice_verify_zeroed() {
+    let mut buffer = [0xFFu8; 128]; // Fill with non-zero values
+
+    let slice = u32::alloc_zeroed_slice(&mut buffer).unwrap();
+
+    // All values in the slice should be zero
+    for &value in slice.iter() {
+        assert_eq!(value, 0);
+    }
+
+    // The portion of the buffer that was used should be zeroed
+    let used_bytes = std::mem::size_of_val(slice);
+    for &byte in &buffer[..used_bytes] {
+        assert_eq!(byte, 0);
+    }
 }

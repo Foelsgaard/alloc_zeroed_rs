@@ -107,4 +107,90 @@ pub unsafe trait AllocZeroed: Sized {
             Ok(&mut *ptr)
         }
     }
+
+    /// Allocates the largest possible slice of zero-initialized `T` values from a byte buffer
+    ///
+    /// This method attempts to allocate a slice of `T` values from the provided byte buffer,
+    /// ensuring proper alignment and zero-initialization. It returns the largest possible
+    /// contiguous slice that fits in the available space after alignment requirements are met.
+    ///
+    /// # Safety
+    /// The same safety requirements as [`alloc_zeroed`] apply - the all-zero bit pattern must
+    /// be valid for type `T`. This is guaranteed by the [`AllocZeroed`] trait bound.
+    ///
+    /// # Behavior for Zero-Sized Types (ZSTs)
+    /// For zero-sized types, this returns a slice of length [`usize::MAX`] since ZSTs require
+    /// no storage and can be created in unlimited quantities from any aligned pointer.
+    ///
+    /// # Errors
+    /// Returns [`AllocError`] if:
+    /// - The buffer cannot be aligned to `T`'s alignment requirements
+    /// - The available space after alignment is smaller than the size of one `T`
+    ///
+    /// # Examples
+    /// ```
+    /// # use alloc_zeroed::AllocZeroed;
+    /// # use core::mem::size_of;
+    /// let mut buffer = [0u8; 1024];
+    /// let slice = u32::alloc_zeroed_slice(&mut buffer).unwrap();
+    /// assert!(slice.len() >= 256); // At least 256 u32s in 1KB (considering alignment)
+    /// ```
+    ///
+    /// [`alloc_zeroed`]: AllocZeroed::alloc_zeroed
+    fn alloc_zeroed_slice(mem: &mut [u8]) -> Result<&mut [Self], AllocError> {
+        use core::mem::{align_of, size_of};
+
+        let size = size_of::<Self>();
+        let align = align_of::<Self>();
+
+        // Handle zero-sized types
+        if size == 0 {
+            // For ZSTs, we can create as many as will fit in usize::MAX
+            let slice = unsafe {
+                core::slice::from_raw_parts_mut(
+                    core::ptr::NonNull::<Self>::dangling().as_ptr(),
+                    usize::MAX,
+                )
+            };
+            return Ok(slice);
+        }
+
+        let mem_ptr = mem.as_mut_ptr();
+        let offset = mem_ptr.align_offset(align);
+
+        if offset == usize::MAX {
+            return Err(AllocError::builder(AllocErrorKind::AlignmentFailed {
+                required_alignment: align,
+                address: mem_ptr as usize,
+            })
+            .build());
+        }
+
+        let available_bytes = mem.len().saturating_sub(offset);
+        if available_bytes < size {
+            return Err(AllocError::builder(AllocErrorKind::BufferTooSmall {
+                required: size,
+                available: available_bytes,
+                alignment: align,
+            })
+            .build());
+        }
+
+        // Calculate how many complete items we can fit
+        let count = available_bytes / size;
+        let total_bytes = count * size;
+
+        // Get the slice for the allocation
+        let alloc_slice = &mut mem[offset..offset + total_bytes];
+
+        // Zero the memory
+        alloc_slice.fill(0);
+
+        // SAFETY: We've ensured the pointer is properly aligned and there's enough space
+        // The memory has been zeroed, which is valid for T (guaranteed by AllocZeroed trait bound)
+        unsafe {
+            let ptr = alloc_slice.as_mut_ptr() as *mut Self;
+            Ok(core::slice::from_raw_parts_mut(ptr, count))
+        }
+    }
 }
