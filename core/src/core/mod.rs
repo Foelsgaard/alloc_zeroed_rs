@@ -143,55 +143,9 @@ pub unsafe trait AllocZeroed: Sized {
     /// [`alloc_zeroed`]: AllocZeroed::alloc_zeroed
     /// [`alloc_zeroed_slice_with_remainder`]: AllocZeroed::alloc_zeroed_slice_with_remainder
     fn alloc_zeroed_with_remainder(mem: &mut [u8]) -> Result<(&mut Self, &mut [u8]), AllocError> {
-        use AllocErrorKind::*;
-        use core::mem;
+        let (slice, remainder) = Self::alloc_zeroed_slice_with_remainder(mem, 1)?;
 
-        let size = mem::size_of::<Self>();
-
-        // Handle zero-sized types
-        if size == 0 {
-            // SAFETY: Zero-sized types don't require actual memory
-            let dangling_ptr = core::ptr::NonNull::<Self>::dangling().as_ptr();
-            return unsafe { Ok((&mut *dangling_ptr, mem)) };
-        }
-
-        let align = mem::align_of::<Self>();
-        let len = mem.len();
-
-        let mem_ptr = mem.as_mut_ptr();
-        let offset = mem_ptr.align_offset(align);
-
-        let type_name = core::any::type_name::<Self>();
-
-        if offset == usize::MAX {
-            return Err(alloc_err!(AlignmentFailed {
-                required_alignment: align,
-                address: mem_ptr as usize,
-            })
-            .with_type_name(type_name)
-            .build());
-        }
-
-        if size > len.saturating_sub(offset) {
-            return Err(alloc_err!(BufferTooSmall {
-                required: size,
-                available: len.saturating_sub(offset),
-                alignment: align,
-            })
-            .with_type_name(type_name)
-            .build());
-        }
-
-        let (_before, after) = mem.split_at_mut(offset);
-        let (alloc_part, remainder) = after.split_at_mut(size);
-
-        let ptr = alloc_part.as_mut_ptr() as *mut Self;
-
-        // SAFETY: We've ensured the pointer is properly aligned and there's enough space
-        unsafe {
-            ptr.write_bytes(0, 1);
-            Ok((&mut *ptr, remainder))
-        }
+        Ok((slice.first_mut().unwrap(), remainder))
     }
 
     /// Allocates the largest possible slice of zero-initialized `T` values from a byte buffer
@@ -231,7 +185,11 @@ pub unsafe trait AllocZeroed: Sized {
         let available_bytes = mem.len().saturating_sub(offset);
 
         // Calculate how many complete items we can fit
-        let count = available_bytes / size;
+        let count = if size == 0 {
+            usize::MAX
+        } else {
+            available_bytes / size
+        };
 
         let (slice, _) = Self::alloc_zeroed_slice_with_remainder(mem, count)?;
 
