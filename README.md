@@ -121,7 +121,7 @@ The derive macro automatically checks that all field types implement `AllocZeroe
 
 ## Examples
 
-See the `examples` directory for complete working examples:
+See the `core/examples` directory for complete working examples:
 
 - `alloc_zeroed.rs`: Buffer-based allocation example
 - `alloc_zeroed_boxed.rs`: Box-based allocation example
